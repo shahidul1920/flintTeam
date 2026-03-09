@@ -5,32 +5,30 @@ import Markdown from 'react-markdown';
 import './App.css';
 
 function App() {
-  const [url, setUrl] = useState('');
-  const [status, setStatus] = useState('idle'); // idle, loading, success, error
-  const [report, setReport] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [messages, setMessages] = useState([{
+    role: 'eva',
+    text: 'System online. What are we building today, boss?'
+  }]);
+  const [currentInput, setCurrentInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Refs for animation
+  // Refs for scrolling and animation
+  const chatContainerRef = useRef(null);
+  const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
-  const formWrapperRef = useRef(null);
-  const loadingWrapperRef = useRef(null);
-  const resultWrapperRef = useRef(null);
-  const scannerRingRef = useRef(null);
+
+  // Auto-scroll to bottom of chat
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading]);
 
   // Initial enter animation
   useLayoutEffect(() => {
     let ctx = gsap.context(() => {
-      // Initial state setup to avoid FOUC
-      gsap.set(formWrapperRef.current, { y: 0, opacity: 1, display: 'flex' });
-      gsap.set(loadingWrapperRef.current, { display: 'none', opacity: 0 });
-      gsap.set(resultWrapperRef.current, { display: 'none', opacity: 0 });
-
-      gsap.from(formWrapperRef.current, { 
-        y: 50, 
+      gsap.from(containerRef.current, { 
         opacity: 0, 
-        duration: 1.2, 
-        ease: "power3.out",
-        delay: 0.2
+        duration: 1.5, 
+        ease: "power2.out"
       });
     }, containerRef);
     return () => ctx.revert();
@@ -38,131 +36,40 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!url) return;
+    if (!currentInput.trim()) return;
 
-    setStatus('loading');
-    setErrorMsg('');
-    setReport('');
+    const userMsg = { role: 'user', text: currentInput };
+    setMessages(prev => [...prev, userMsg]);
+    setCurrentInput('');
+    setIsLoading(true);
 
-    // Animate transition to loading
-    const ctx = gsap.context(() => {
-        const tl = gsap.timeline();
-        tl.to(formWrapperRef.current, { 
-            y: -20, 
-            opacity: 0, 
-            duration: 0.5, 
-            ease: "power2.in",
-            onComplete: () => {
-                gsap.set(formWrapperRef.current, { display: 'none' });
-                gsap.set(loadingWrapperRef.current, { display: 'flex' });
-            }
-        })
-        .fromTo(loadingWrapperRef.current, 
-            { opacity: 0, scale: 0.9 },
-            { opacity: 1, scale: 1, duration: 0.8, ease: "power2.out" }
-        );
+    try {
+      // Simulate network delay or real fetch
+      // const response = await axios.post('http://localhost:8000/api/chat', { message: userMsg.text });
+      
+      const response = await axios.post('http://localhost:8000/api/chat', { 
+        message: userMsg.text 
+      });
 
-        // Continuous scanner rotation
-        gsap.to(scannerRingRef.current, {
-            rotation: 360,
-            duration: 8,
-            repeat: -1,
-            ease: "linear"
-        });
-    }, containerRef);
-  };
+      const replyText = response.data.reply || response.data.message || JSON.stringify(response.data);
 
-  // Effect to trigger API call when status becomes loading
-  useEffect(() => {
-    if (status !== 'loading') return;
-
-    const analyzeUrl = async () => {
-        try {
-            // Using a slight delay to allow the animation to show start
-            await new Promise(r => setTimeout(r, 1500)); 
-            
-            const response = await axios.post('http://localhost:8000/api/analyze', { url });
-            const data = response.data.report || response.data; 
-            setReport(typeof data === 'string' ? data : JSON.stringify(data, null, 2));
-            setStatus('success');
-        } catch (err) {
-            console.error(err);
-            setStatus('error');
-            setErrorMsg(err.message || 'Failed to analyze target.');
-        }
-    };
-    analyzeUrl();
-  }, [status, url]);
-
-  // Handle success/error transitions
-  useEffect(() => {
-      if (status === 'success') {
-          const ctx = gsap.context(() => {
-              const tl = gsap.timeline();
-              tl.to(loadingWrapperRef.current, {
-                  opacity: 0,
-                  scale: 1.1,
-                  duration: 0.5,
-                  ease: "power2.in",
-                  onComplete: () => {
-                      gsap.set(loadingWrapperRef.current, { display: 'none' });
-                      gsap.set(scannerRingRef.current, { rotation: 0 }); // Reset rotation
-                      gsap.set(resultWrapperRef.current, { display: 'block' });
-                  }
-              })
-              .fromTo(resultWrapperRef.current,
-                  { y: 50, opacity: 0 },
-                  { y: 0, opacity: 1, duration: 1, ease: "power4.out" }
-              );
-          }, containerRef);
-          return () => ctx.revert();
-      } else if (status === 'error') {
-           const ctx = gsap.context(() => {
-              gsap.to(loadingWrapperRef.current, {
-                  opacity: 0,
-                  duration: 0.3,
-                  onComplete: () => {
-                    gsap.set(loadingWrapperRef.current, { display: 'none' });
-                    gsap.set(scannerRingRef.current, { rotation: 0 });
-                    gsap.set(formWrapperRef.current, { display: 'flex' });
-                    gsap.to(formWrapperRef.current, {
-                        y: 0,
-                        opacity: 1,
-                        duration: 0.5
-                    });
-                  }
-              });
-           }, containerRef);
-           return () => ctx.revert();
-      }
-  }, [status]);
-
-  const handleReset = () => {
-     const ctx = gsap.context(() => {
-        gsap.to(resultWrapperRef.current, { 
-            opacity: 0, 
-            y: 20, 
-            duration: 0.4, 
-            onComplete: () => {
-                setStatus('idle');
-                setReport('');
-                setUrl('');
-                
-                // Reset views
-                gsap.set(resultWrapperRef.current, { display: 'none' });
-                gsap.set(formWrapperRef.current, { display: 'flex' });
-                
-                gsap.fromTo(formWrapperRef.current, 
-                    { y: 50, opacity: 0 },
-                    { y: 0, opacity: 1, duration: 0.8, ease: "power3.out" }
-                );
-            }
-        });
-     }, containerRef);
+      setMessages(prev => [...prev, {
+        role: 'eva',
+        text: replyText
+      }]);
+    } catch (err) {
+      console.error(err);
+      setMessages(prev => [...prev, {
+        role: 'eva',
+        text: `**System Alert:** Connection disrupted. Error: ${err.message}`
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div ref={containerRef} className="min-h-screen w-full bg-[#050507] text-gray-200 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans selection:bg-purple-500/30">
+    <div ref={containerRef} className="min-h-screen w-full bg-[#050507] text-gray-200 flex flex-col items-center p-4 md:p-6 relative overflow-hidden font-sans selection:bg-purple-500/30">
       
       {/* Ambient Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -171,107 +78,88 @@ function App() {
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150"></div>
       </div>
 
-      <div className="z-10 w-full max-w-5xl flex flex-col items-center">
+      <div className="z-10 w-full max-w-4xl flex flex-col h-[90vh]">
         
-        {/* Header Title */}
-        <div className={`text-center mb-16 transition-all duration-700 ease-out ${status === 'success' ? 'opacity-40 scale-90 mb-8' : 'opacity-100'}`}>
-          <div className="inline-block px-3 py-1 mb-4 rounded-full border border-blue-500/20 bg-blue-500/10 text-blue-400 text-xs tracking-[0.2em] font-medium uppercase font-mono">
+        {/* Header Title - Compact */}
+        <div className="text-center mb-6 shrink-0">
+          <div className="inline-block px-3 py-1 mb-2 rounded-full border border-blue-500/20 bg-blue-500/10 text-blue-400 text-[10px] tracking-[0.2em] font-medium uppercase font-mono">
             System Online
           </div>
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white via-gray-300 to-gray-600 drop-shadow-xl">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white via-gray-300 to-gray-600 drop-shadow-xl">
             FLINT INTELLIGENCE
           </h1>
-          <p className="mt-4 text-gray-500 text-sm md:text-base tracking-[0.2em] uppercase font-mono">
-            Automated Reconnaissance & Lead Analysis
-          </p>
+        </div>
+
+        {/* Chat Interface */}
+        <div className="flex-grow overflow-y-auto mb-6 pr-2 custom-scrollbar" ref={chatContainerRef}>
+            <div className="flex flex-col gap-6 pb-2">
+                {messages.map((msg, idx) => (
+                    <div key={idx} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] md:max-w-[75%] p-5 rounded-2xl backdrop-blur-md border shadow-lg ${
+                            msg.role === 'user' 
+                            ? 'bg-gradient-to-br from-blue-600/20 to-purple-600/20 border-blue-500/30 rounded-br-sm text-white' 
+                            : 'bg-[#0f0f13]/80 border-white/10 rounded-bl-sm text-gray-300'
+                        }`}>
+                            <div className="flex items-center gap-2 mb-2 opacity-50 text-[10px] font-mono uppercase tracking-widest">
+                                <div className={`w-1.5 h-1.5 rounded-full ${msg.role === 'user' ? 'bg-purple-400' : 'bg-cyan-400 shadow-[0_0_8px_cyan]'}`}></div>
+                                {msg.role === 'user' ? 'OPERATOR' : 'EVA: CORE SYSTEM'}
+                            </div>
+                            {msg.role === 'eva' ? (
+                                <div className="prose prose-invert prose-sm prose-headings:text-cyan-100 prose-headings:font-light prose-p:text-gray-300 prose-strong:text-white prose-a:text-cyan-400 max-w-none leading-relaxed">
+                                    <Markdown>{msg.text}</Markdown>
+                                </div>
+                            ) : (
+                                <p className="text-sm md:text-base font-light leading-relaxed">{msg.text}</p>
+                            )}
+                        </div>
+                    </div>
+                ))}
+                
+                {isLoading && (
+                    <div className="flex justify-start w-full">
+                        <div className="max-w-[80%] p-4 rounded-2xl rounded-bl-sm bg-[#0f0f13]/60 border border-white/10 backdrop-blur-md flex items-center gap-4">
+                            {/* Mini Scanner Animation */}
+                            <div className="relative w-8 h-8 flex items-center justify-center">
+                                 <div className="absolute inset-0 border-2 border-transparent border-t-cyan-500/80 border-r-cyan-500/80 rounded-full animate-spin"></div>
+                                 <div className="absolute inset-2 border-2 border-transparent border-b-purple-500/80 border-l-purple-500/80 rounded-full animate-spin-reverse-slow"></div>
+                                 <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                            </div>
+                            <span className="text-xs font-mono text-cyan-400 animate-pulse tracking-widest">PROCESSING STREAM...</span>
+                        </div>
+                    </div>
+                )}
+                <div ref={messagesEndRef} />
+            </div>
         </div>
 
         {/* Input Form Container */}
-        <div ref={formWrapperRef} className="w-full flex-col items-center w-full max-w-xl">
-            <form onSubmit={handleSubmit} className="w-full relative group">
-                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl blur opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-200"></div>
-                <div className="relative flex items-center bg-[#0a0a0c] rounded-xl border border-gray-800/80 p-2 shadow-2xl backdrop-blur-sm">
-                    <div className="pl-4 text-gray-500">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    </div>
-                    <input 
-                        type="url" 
-                        placeholder="Enter Target URL to Analyze..."
-                        className="flex-grow bg-transparent border-none outline-none text-white px-4 py-4 placeholder-gray-600 focus:ring-0 font-light tracking-wide"
-                        value={url}
-                        onChange={(e) => setUrl(e.target.value)}
-                        required
-                    />
-                    <button 
-                        type="submit"
-                        className="mr-1 px-8 py-3 bg-white text-black font-bold rounded-lg hover:bg-gray-200 transition-all duration-300 transform shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_30px_rgba(255,255,255,0.5)]"
-                    >
-                        ANALYZE
-                    </button>
+        <div className="w-full shrink-0 relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+            <form onSubmit={handleSubmit} className="relative flex items-end bg-[#0a0a0c] rounded-xl border border-gray-800/80 p-2 shadow-2xl backdrop-blur-sm">
+                <div className="pl-3 pb-3 text-gray-500">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
                 </div>
+                <textarea 
+                    placeholder="Enter command or directive..."
+                    className="flex-grow bg-transparent border-none outline-none text-white px-4 py-3 placeholder-gray-600 focus:ring-0 font-light tracking-wide resize-none h-14 max-h-32 custom-scrollbar"
+                    value={currentInput}
+                    onChange={(e) => setCurrentInput(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSubmit(e);
+                        }
+                    }}
+                    required
+                />
+                <button 
+                    type="submit"
+                    className={`ml-2 mb-1 p-3 rounded-lg border border-white/10 transition-all duration-300 ${isLoading || !currentInput.trim() ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-white/10 text-white hover:bg-white/20 hover:shadow-[0_0_15px_rgba(255,255,255,0.2)]'}`}
+                    disabled={isLoading || !currentInput.trim()}
+                >
+                    <svg className="w-5 h-5 transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                </button>
             </form>
-            
-            {status === 'error' && (
-                <div className="mt-6 text-red-400 bg-red-950/30 border border-red-900/50 px-6 py-4 rounded-lg text-sm text-center font-mono">
-                    <span className="block text-xs font-bold uppercase mb-1 opacity-70">Error Details</span>
-                    {errorMsg}
-                </div>
-            )}
-        </div>
-
-        {/* Scanning Animation Container */}
-        <div ref={loadingWrapperRef} className="hidden flex-col items-center justify-center py-8">
-            <div className="relative w-48 h-48 mb-8 flex items-center justify-center">
-                {/* Scanner Rings */}
-                <div ref={scannerRingRef} className="absolute inset-0 border-[1px] border-transparent border-t-cyan-500/50 border-r-cyan-500/50 rounded-full shadow-[0_0_40px_rgba(6,182,212,0.2)]"></div>
-                <div className="absolute inset-4 border-[1px] border-transparent border-b-purple-500/50 border-l-purple-500/50 rounded-full animate-spin-reverse-slow"></div>
-                <div className="absolute inset-[30%] bg-cyan-500/10 rounded-full blur-xl animate-pulse"></div>
-                
-                {/* Center Tech Graphic */}
-                 <div className="w-2 h-2 bg-white rounded-full shadow-[0_0_20px_white]"></div>
-            </div>
-            <h2 className="text-2xl font-mono text-cyan-400 tracking-widest animate-pulse">ANALYZING TARGET</h2>
-            <div className="mt-3 flex flex-col items-center space-y-1">
-                <span className="text-gray-600 font-mono text-xs uppercase tracking-widest">Deciphering HTML Structure...</span>
-                <span className="text-gray-700 font-mono text-[10px] uppercase tracking-widest">Extracting Meta Signals...</span>
-            </div>
-        </div>
-
-        {/* Success Result Container */}
-        <div ref={resultWrapperRef} className="hidden w-full relative">
-            <div className="backdrop-blur-xl bg-[#0f0f13]/80 border border-white/10 rounded-2xl p-8 md:p-12 shadow-2xl relative overflow-hidden ring-1 ring-white/5">
-                
-                {/* Glass decoration */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-cyan-500/5 to-transparent rounded-bl-[200px] pointer-events-none"></div>
-
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 border-b border-white/5 pb-8 gap-4">
-                    <div>
-                        <div className="flex items-center gap-2 mb-2">
-                             <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_lime]"></span>
-                             <span className="text-green-500/80 text-xs font-mono uppercase tracking-widest">Analysis Complete</span>
-                        </div>
-                        <h2 className="text-3xl font-bold text-white tracking-tight">Intelligence Report</h2>
-                        <a href={url} target="_blank" rel="noreferrer" className="text-gray-400 text-sm mt-1 hover:text-cyan-400 transition-colors font-mono truncate max-w-md block">{url}</a>
-                    </div>
-                    <button 
-                        onClick={handleReset}
-                        className="px-6 py-2.5 text-xs font-mono font-bold uppercase tracking-wider border border-white/10 rounded hover:bg-white/5 hover:border-white/30 transition-all text-gray-300"
-                    >
-                        Create New Report
-                    </button>
-                </div>
-                
-                {/* Markdown Content */}
-                <div className="result-content prose prose-invert prose-headings:text-cyan-100 prose-headings:font-light prose-h1:text-2xl prose-h2:text-xl prose-p:text-gray-300 prose-strong:text-white prose-li:text-gray-300 prose-a:text-cyan-400 max-w-none">
-                    <Markdown>{report}</Markdown>
-                </div>
-
-                {/* Footer */}
-                <div className="mt-12 pt-6 border-t border-white/5 flex justify-between items-center text-[10px] text-gray-600 font-mono uppercase tracking-widest opacity-50">
-                    <span>Flint Intelligence Node v4.2</span>
-                    <span>{new Date().toISOString().split('T')[0]}</span>
-                </div>
-            </div>
         </div>
 
       </div>
