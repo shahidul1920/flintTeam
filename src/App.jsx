@@ -51,7 +51,7 @@ function App() {
         message: userMsg.text 
       });
 
-      const replyText = response.data.reply || response.data.message || JSON.stringify(response.data);
+      const replyText = response.data.response || response.data.reply || JSON.stringify(response.data);
 
       setMessages(prev => [...prev, {
         role: 'eva',
@@ -69,7 +69,7 @@ function App() {
   };
 
   return (
-    <div ref={containerRef} className="min-h-screen w-full bg-[#050507] text-gray-200 flex flex-col items-center p-4 md:p-6 relative overflow-hidden font-sans selection:bg-purple-500/30">
+    <div ref={containerRef} className="h-screen w-full bg-[#050507] text-gray-200 flex flex-col relative overflow-hidden font-sans selection:bg-purple-500/30">
       
       {/* Ambient Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -78,7 +78,7 @@ function App() {
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150"></div>
       </div>
 
-      <div className="z-10 w-full max-w-4xl flex flex-col h-[90vh]">
+      <div className="z-10 w-full h-full flex flex-col p-4 md:p-6">
         
         {/* Header Title - Compact */}
         <div className="text-center mb-6 shrink-0">
